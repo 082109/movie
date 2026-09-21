@@ -9,37 +9,48 @@ from zoneinfo import ZoneInfo
 # =========================================================
 
 st.set_page_config(
-    page_title="박스오피스",
+    page_title="Daily Box Office",
     page_icon="🎬",
     layout="wide"
 )
 
 
 # =========================================================
-# 🎞️ 영화관 느낌의 화면 디자인
-# 검정 + 빨강 + 흰색 테마
+# 🎞️ 영화관 느낌의 배경
+# 검은색 + 빨간색
 # =========================================================
 
 st.markdown(
     """
     <style>
-
     /* 전체 배경 */
     .stApp {
-        background-color: #0f0f0f;
-        color: #ffffff;
+        background:
+            radial-gradient(
+                circle at top center,
+                #4a0000 0%,
+                #1a0000 25%,
+                #0d0d0d 60%,
+                #080808 100%
+            );
+        color: white;
     }
 
-    /* 상단 제목 */
-    h1 {
-        color: #ffffff !important;
-        font-weight: 800 !important;
-        letter-spacing: -2px;
+    /* 메인 화면 위쪽에 은은한 빨간 빛 */
+    .stApp::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 5px;
+        background: #d00000;
+        z-index: 999;
     }
 
-    /* 소제목 */
-    h2, h3 {
-        color: #ffffff !important;
+    /* 제목 */
+    h1, h2, h3 {
+        color: white !important;
     }
 
     /* 일반 글씨 */
@@ -47,32 +58,18 @@ st.markdown(
         color: #eeeeee;
     }
 
-    /* 날짜 선택 영역 */
-    div[data-testid="stDateInput"] {
-        background-color: #1c1c1c;
-        border-radius: 12px;
-        padding: 8px;
-        border: 1px solid #3a3a3a;
-    }
-
-    /* 영화 카드 */
+    /* 영화 카드 테두리 */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #1c1c1c;
-        border: 1px solid #3d3d3d;
+        background-color: rgba(30, 30, 30, 0.92);
+        border-color: #4a2020;
         border-radius: 14px;
     }
 
-    /* 카드 안쪽 글씨 */
-    div[data-testid="stVerticalBlockBorderWrapper"] p {
-        color: #eeeeee;
-    }
-
-    /* Streamlit metric */
+    /* Metric */
     div[data-testid="stMetric"] {
-        background-color: #262626;
+        background-color: #252020;
+        border: 1px solid #4a3030;
         border-radius: 10px;
-        padding: 12px;
-        border: 1px solid #3d3d3d;
     }
 
     div[data-testid="stMetricLabel"] {
@@ -80,27 +77,19 @@ st.markdown(
     }
 
     div[data-testid="stMetricValue"] {
-        color: #ffffff !important;
+        color: white !important;
     }
 
-    /* 버튼 */
-    .stButton > button {
-        background-color: #b00020;
-        color: white;
-        border: none;
-        border-radius: 8px;
-    }
-
-    /* 선택된 날짜 */
-    input {
-        color: #ffffff !important;
+    /* 날짜 선택창 */
+    div[data-testid="stDateInput"] {
+        background-color: #1b1717;
+        border-radius: 10px;
     }
 
     /* 구분선 */
     hr {
-        border-color: #3a3a3a;
+        border-color: #552020;
     }
-
     </style>
     """,
     unsafe_allow_html=True
@@ -113,23 +102,13 @@ st.markdown(
 
 st.title("🎬 DAILY BOX OFFICE")
 
-st.markdown(
-    """
-    <div style="
-        color:#bbbbbb;
-        font-size:16px;
-        margin-top:-10px;
-        margin-bottom:25px;
-    ">
-        원하는 날짜를 선택해서 그날의 박스오피스를 확인해보세요.
-    </div>
-    """,
-    unsafe_allow_html=True
+st.caption(
+    "원하는 날짜를 선택해서 그날의 박스오피스를 확인해보세요."
 )
 
 
 # =========================================================
-# 🔐 KOBIS 인증키 가져오기
+# 🔐 KOBIS 인증키
 # =========================================================
 
 try:
@@ -145,16 +124,14 @@ except Exception:
 
 
 # =========================================================
-# 🇰🇷 한국 시간 계산
+# 🇰🇷 한국 시간
 # =========================================================
 
-# 서버 시간이 한국 시간이 아니어도
-# 항상 한국 시간을 기준으로 계산합니다.
 KST = ZoneInfo("Asia/Seoul")
 
 today = datetime.now(KST).date()
 
-# 오늘은 아직 집계 전이므로 선택할 수 없습니다.
+# 오늘은 아직 집계 전이므로 어제까지만 선택 가능
 yesterday = today - timedelta(days=1)
 
 
@@ -174,7 +151,7 @@ selected_date = st.date_input(
 
 
 # =========================================================
-# 📅 KOBIS 날짜 형식으로 변경
+# 📅 KOBIS 날짜 형식
 # =========================================================
 
 target_date = selected_date.strftime("%Y%m%d")
@@ -185,7 +162,7 @@ display_date = selected_date.strftime(
 
 
 # =========================================================
-# 📡 KOBIS API 주소
+# 📡 KOBIS API
 # =========================================================
 
 API_URL = (
@@ -196,11 +173,10 @@ API_URL = (
 
 
 # =========================================================
-# 🎟️ 박스오피스 가져오기
+# 🎟️ 박스오피스 데이터 가져오기
 # =========================================================
 
 def get_boxoffice(target_dt):
-    """선택한 날짜의 KOBIS 박스오피스를 가져옵니다."""
 
     params = {
         "key": KOBIS_KEY,
@@ -242,9 +218,9 @@ def get_boxoffice(target_dt):
         return None
 
 
-    # =====================================================
-    # 🔑 인증키 오류 확인
-    # =====================================================
+    # -----------------------------------------------------
+    # 🔑 인증키 오류
+    # -----------------------------------------------------
 
     if "faultInfo" in data:
 
@@ -265,9 +241,9 @@ def get_boxoffice(target_dt):
         return None
 
 
-    # =====================================================
-    # 📦 박스오피스 결과 확인
-    # =====================================================
+    # -----------------------------------------------------
+    # 📦 결과 확인
+    # -----------------------------------------------------
 
     if "boxOfficeResult" not in data:
 
@@ -279,17 +255,15 @@ def get_boxoffice(target_dt):
         return None
 
 
-    result = data["boxOfficeResult"]
-
-    movies = result.get(
+    movies = data["boxOfficeResult"].get(
         "dailyBoxOfficeList",
         []
     )
 
 
-    # =====================================================
+    # -----------------------------------------------------
     # 🎞️ 영화 목록이 없는 경우
-    # =====================================================
+    # -----------------------------------------------------
 
     if not movies:
 
@@ -314,61 +288,22 @@ def get_boxoffice(target_dt):
 
 movies = get_boxoffice(target_date)
 
-
 if movies is None:
     st.stop()
 
 
 # =========================================================
-# 📅 날짜 제목
+# 📅 날짜 표시
 # =========================================================
 
 st.divider()
 
-st.markdown(
-    f"""
-    <div style="
-        background:linear-gradient(
-            90deg,
-            #4a0000 0%,
-            #260000 45%,
-            #1c1c1c 100%
-        );
-        border-left:5px solid #e50914;
-        border-radius:10px;
-        padding:18px 22px;
-        margin:15px 0 20px 0;
-    ">
+st.subheader(
+    f"🎞️ {display_date} 박스오피스"
+)
 
-        <div style="
-            color:#ff7777;
-            font-size:13px;
-            font-weight:700;
-            letter-spacing:1px;
-        ">
-            BOX OFFICE
-        </div>
-
-        <div style="
-            color:#ffffff;
-            font-size:28px;
-            font-weight:800;
-            margin-top:4px;
-        ">
-            {display_date}
-        </div>
-
-        <div style="
-            color:#bbbbbb;
-            font-size:14px;
-            margin-top:5px;
-        ">
-            총 {len(movies)}편의 영화
-        </div>
-
-    </div>
-    """,
-    unsafe_allow_html=True
+st.caption(
+    f"총 {len(movies)}편의 영화"
 )
 
 
@@ -420,9 +355,9 @@ for movie in movies:
     )
 
 
-    # =====================================================
-    # 🔢 숫자 변환
-    # =====================================================
+    # -----------------------------------------------------
+    # 숫자 변환
+    # -----------------------------------------------------
 
     try:
         audi_cnt_number = int(audi_cnt)
@@ -452,9 +387,9 @@ for movie in movies:
     screen_cnt_text = f"{screen_cnt_number:,}개"
 
 
-    # =====================================================
-    # 📅 개봉일 처리
-    # =====================================================
+    # -----------------------------------------------------
+    # 📅 개봉일
+    # -----------------------------------------------------
 
     if open_date:
 
@@ -479,65 +414,40 @@ for movie in movies:
         open_date_text = "정보 없음"
 
 
-    # =====================================================
+    # -----------------------------------------------------
     # 🏆 100만 관객
-    # =====================================================
+    # -----------------------------------------------------
 
     if audi_acc_number >= 1_000_000:
 
-        trophy = " 🏆"
+        movie_title = f"{movie_name} 🏆"
 
     else:
 
-        trophy = ""
+        movie_title = movie_name
 
 
-    # =====================================================
+    # -----------------------------------------------------
     # 📈 순위 변화
-    # =====================================================
+    # -----------------------------------------------------
 
     if rank_old_new == "NEW":
 
-        rank_change_html = (
-            '<span style="'
-            'color:#ff5252;'
-            'font-weight:700;'
-            '">🆕 NEW</span>'
-        )
+        rank_change = "🆕 NEW"
 
     elif rank_change_number > 0:
 
         # 양수 = 순위 상승
-        rank_change_html = (
-            '<span style="'
-            'color:#ff4d4d;'
-            'font-weight:800;'
-            'font-size:17px;'
-            '">▲ '
-            f'{rank_change_number}'
-            '</span>'
-        )
+        rank_change = f"🔴 ▲ {rank_change_number}"
 
     elif rank_change_number < 0:
 
         # 음수 = 순위 하락
-        rank_change_html = (
-            '<span style="'
-            'color:#70a7ff;'
-            'font-weight:800;'
-            'font-size:17px;'
-            '">▼ '
-            f'{abs(rank_change_number)}'
-            '</span>'
-        )
+        rank_change = f"🔵 ▼ {abs(rank_change_number)}"
 
     else:
 
-        rank_change_html = (
-            '<span style="'
-            'color:#999999;'
-            '">━ 유지</span>'
-        )
+        rank_change = "━ 유지"
 
 
     # =====================================================
@@ -557,30 +467,12 @@ for movie in movies:
 
         with col1:
 
-            st.markdown(
-                f"""
-                <div style="
-                    text-align:center;
-                    padding-top:5px;
-                ">
+            st.subheader(
+                f"#{rank}"
+            )
 
-                    <div style="
-                        color:#e50914;
-                        font-size:32px;
-                        font-weight:900;
-                    ">
-                        #{rank}
-                    </div>
-
-                    <div style="
-                        margin-top:8px;
-                    ">
-                        {rank_change_html}
-                    </div>
-
-                </div>
-                """,
-                unsafe_allow_html=True
+            st.write(
+                rank_change
             )
 
 
@@ -590,41 +482,24 @@ for movie in movies:
 
         with col2:
 
-            st.markdown(
-                f"""
-                <div style="
-                    color:#ffffff;
-                    font-size:23px;
-                    font-weight:800;
-                    margin-bottom:12px;
-                ">
-                    {movie_name}{trophy}
-                </div>
+            st.subheader(
+                movie_title
+            )
 
-                <div style="
-                    color:#dddddd;
-                    line-height:2;
-                    font-size:15px;
-                ">
+            st.write(
+                f"🎬 **개봉일:** {open_date_text}"
+            )
 
-                    🎬 <b>개봉일</b>　
-                    {open_date_text}
-                    <br>
+            st.write(
+                f"👥 **일일 관객:** {audi_cnt_text}"
+            )
 
-                    👥 <b>일일 관객</b>　
-                    {audi_cnt_text}
-                    <br>
+            st.write(
+                f"🎟️ **누적 관객:** {audi_acc_text}"
+            )
 
-                    🎟️ <b>누적 관객</b>　
-                    {audi_acc_text}
-                    <br>
-
-                    🖥️ <b>스크린 수</b>　
-                    {screen_cnt_text}
-
-                </div>
-                """,
-                unsafe_allow_html=True
+            st.write(
+                f"🖥️ **스크린 수:** {screen_cnt_text}"
             )
 
 
@@ -646,7 +521,7 @@ for movie in movies:
 
 
 # =========================================================
-# 📌 하단 출처
+# 📌 출처
 # =========================================================
 
 st.divider()
