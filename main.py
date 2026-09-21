@@ -5,72 +5,37 @@ from zoneinfo import ZoneInfo
 
 
 # =========================================================
-# 🎬 Streamlit 기본 설정
+# 🎬 기본 설정
 # =========================================================
 
 st.set_page_config(
-    page_title="어제의 박스오피스",
+    page_title="박스오피스",
     page_icon="🎬",
     layout="wide"
 )
 
 
 # =========================================================
-# 🎞️ 영화관 분위기의 화면 디자인
+# 🎞️ 영화관 느낌의 화면 디자인
 # =========================================================
 
 st.markdown(
     """
     <style>
     .stApp {
-        background: linear-gradient(180deg, #080808 0%, #171717 100%);
-        color: white;
+        background-color: #0b0b0b;
     }
 
-    .main-title {
-        font-size: 45px;
-        font-weight: 800;
+    h1 {
         letter-spacing: -2px;
-        margin-bottom: 5px;
     }
 
-    .subtitle {
-        color: #aaaaaa;
-        font-size: 16px;
-        margin-bottom: 30px;
-    }
-
-    .movie-card {
-        background: #202020;
-        border: 1px solid #333333;
-        border-radius: 15px;
-        padding: 22px;
-        margin-bottom: 14px;
-    }
-
-    .rank {
-        font-size: 36px;
-        font-weight: 800;
-    }
-
-    .movie-name {
-        font-size: 24px;
-        font-weight: 700;
-        margin-bottom: 12px;
-    }
-
-    .info {
-        color: #cccccc;
-        line-height: 1.9;
-        font-size: 15px;
-    }
-
-    .date-box {
-        background: #111111;
+    .movie-box {
+        background-color: #1a1a1a;
         border: 1px solid #333333;
         border-radius: 14px;
         padding: 18px;
-        margin-bottom: 25px;
+        margin-bottom: 12px;
     }
     </style>
     """,
@@ -82,16 +47,10 @@ st.markdown(
 # 🎬 제목
 # =========================================================
 
-st.markdown(
-    '<div class="main-title">🎬 YESTERDAY BOX OFFICE</div>',
-    unsafe_allow_html=True
-)
+st.title("🎬 DAILY BOX OFFICE")
 
-st.markdown(
-    '<div class="subtitle">'
-    '어제 극장에서 가장 많은 관객이 선택한 영화들을 만나보세요.'
-    '</div>',
-    unsafe_allow_html=True
+st.caption(
+    "원하는 날짜를 선택하면 그날의 박스오피스를 확인할 수 있습니다."
 )
 
 
@@ -99,39 +58,58 @@ st.markdown(
 # 🔐 KOBIS 인증키 가져오기
 # =========================================================
 
-# 실제 인증키는 코드에 작성하지 않고
-# Streamlit Cloud의 Secrets에서 가져옵니다.
+# 실제 인증키는 코드에 적지 않습니다.
+# Streamlit Cloud의 Secrets에서 KOBIS_KEY를 가져옵니다.
 try:
     KOBIS_KEY = st.secrets["KOBIS_KEY"]
 
 except Exception:
     st.error(
         "🔐 KOBIS 인증키를 찾을 수 없습니다.\n\n"
-        "Streamlit Cloud의 Settings → Secrets에서 "
-        "`KOBIS_KEY`가 등록되어 있는지 확인해 주세요."
+        "Streamlit Cloud → Settings → Secrets에서 "
+        "`KOBIS_KEY`가 등록되어 있는지 확인해주세요."
     )
-
     st.stop()
 
 
 # =========================================================
-# 🇰🇷 한국 시간 기준으로 '어제' 계산
+# 🇰🇷 한국 시간 계산
 # =========================================================
 
-# 배포 서버의 시간이 한국 시간이 아니어도
-# 한국 시간을 기준으로 날짜를 계산합니다.
+# 서버가 한국 시간이 아니어도
+# 항상 한국 시간 기준으로 날짜를 계산합니다.
 KST = ZoneInfo("Asia/Seoul")
 
-today_kst = datetime.now(KST).date()
+today = datetime.now(KST).date()
 
-yesterday_kst = today_kst - timedelta(days=1)
+# 오늘은 아직 집계 전이므로 선택할 수 없게 합니다.
+yesterday = today - timedelta(days=1)
 
-# KOBIS API에서 사용하는 날짜 형식
-# 예: 2026년 9월 21일 → 20260921
-target_date = yesterday_kst.strftime("%Y%m%d")
 
-# 화면에 보여줄 날짜
-display_date = yesterday_kst.strftime("%Y년 %m월 %d일")
+# =========================================================
+# 📅 날짜 선택
+# =========================================================
+
+st.subheader("📅 조회 날짜")
+
+selected_date = st.date_input(
+    "박스오피스를 확인할 날짜를 선택하세요.",
+    value=yesterday,
+    min_value=datetime(2004, 1, 1).date(),
+    max_value=yesterday,
+    format="YYYY-MM-DD"
+)
+
+
+# =========================================================
+# 📅 선택한 날짜를 KOBIS 형식으로 변환
+# =========================================================
+
+# KOBIS는 날짜를 YYYYMMDD 형식으로 받습니다.
+target_date = selected_date.strftime("%Y%m%d")
+
+# 화면에 표시할 날짜
+display_date = selected_date.strftime("%Y년 %m월 %d일")
 
 
 # =========================================================
@@ -146,51 +124,46 @@ API_URL = (
 
 
 # =========================================================
-# 🎟️ 박스오피스 데이터 가져오기
+# 🎟️ 박스오피스 가져오기
 # =========================================================
 
-def get_boxoffice():
-    """KOBIS에서 어제의 일별 박스오피스 데이터를 가져옵니다."""
+def get_boxoffice(target_dt):
+    """선택한 날짜의 KOBIS 일별 박스오피스를 가져옵니다."""
 
     params = {
         "key": KOBIS_KEY,
-        "targetDt": target_date
+        "targetDt": target_dt
     }
 
     try:
-        # KOBIS API에 요청합니다.
         response = requests.get(
             API_URL,
             params=params,
             timeout=15
         )
 
-        # HTTP 오류가 있으면 예외를 발생시킵니다.
+        # HTTP 오류 확인
         response.raise_for_status()
 
-        # JSON 형태의 응답을 가져옵니다.
+        # JSON 데이터로 변환
         data = response.json()
 
     except requests.exceptions.RequestException as e:
-
         st.error(
             "🚨 KOBIS API에 연결하지 못했습니다.\n\n"
-            "다음 내용을 확인해 주세요.\n"
+            "다음 내용을 확인해주세요.\n"
             "• 인터넷 연결 상태\n"
             "• KOBIS API 주소\n"
             "• Streamlit Cloud의 네트워크 상태\n\n"
             f"오류 내용: {e}"
         )
-
         return None
 
     except ValueError:
-
         st.error(
             "🚨 KOBIS에서 정상적인 데이터를 받지 못했습니다.\n\n"
-            "잠시 후 다시 실행하거나 KOBIS API 상태를 확인해 주세요."
+            "잠시 후 다시 실행해주세요."
         )
-
         return None
 
 
@@ -198,64 +171,66 @@ def get_boxoffice():
     # 🔑 인증키 오류 확인
     # =====================================================
 
-    # KOBIS는 인증키가 잘못되어도 HTTP 상태코드가 200일 수 있습니다.
-    # 대신 faultInfo가 응답에 들어옵니다.
+    # KOBIS는 인증키가 잘못되어도 HTTP 200을
+    # 반환할 수 있기 때문에 faultInfo를 확인합니다.
     if "faultInfo" in data:
 
         fault_info = data["faultInfo"]
 
         error_message = fault_info.get(
             "message",
-            "인증키 또는 요청 정보를 확인해 주세요."
+            "KOBIS 인증키를 확인해주세요."
         )
 
         st.error(
-            "🔑 KOBIS API 인증에 문제가 있습니다.\n\n"
+            "🔑 KOBIS 인증키에 문제가 있습니다.\n\n"
             f"{error_message}\n\n"
             "Streamlit Cloud → Settings → Secrets에서 "
-            "`KOBIS_KEY`가 정확하게 등록되어 있는지 확인해 주세요."
+            "`KOBIS_KEY`가 정확하게 등록되어 있는지 확인해주세요."
         )
 
         return None
 
 
     # =====================================================
-    # 📦 정상적인 박스오피스 결과 확인
+    # 📦 박스오피스 결과 확인
     # =====================================================
 
     if "boxOfficeResult" not in data:
 
         st.error(
-            "⚠️ KOBIS 응답에서 박스오피스 결과를 찾을 수 없습니다.\n\n"
-            "KOBIS API의 응답 형식이나 서비스 상태를 확인해 주세요."
+            "⚠️ KOBIS에서 박스오피스 결과를 받지 못했습니다.\n\n"
+            "KOBIS API의 응답을 확인해주세요."
         )
 
         return None
 
 
-    boxoffice_result = data["boxOfficeResult"]
+    result = data["boxOfficeResult"]
 
-    movies = boxoffice_result.get(
+    movies = result.get(
         "dailyBoxOfficeList",
         []
     )
 
 
     # =====================================================
-    # 🎞️ 영화 목록이 비어 있는 경우
+    # 🎞️ 영화 목록이 없는 경우
     # =====================================================
 
     if not movies:
 
         st.warning(
-            f"🎞️ {display_date}의 박스오피스 데이터가 없습니다.\n\n"
-            "다음 내용을 확인해 주세요.\n"
-            "• 해당 날짜의 박스오피스가 집계되었는지\n"
-            "• KOBIS API가 정상적으로 작동하는지\n"
-            "• 인증키가 정상적으로 등록되어 있는지"
+            "🎞️ 그날은 아직 집계 전입니다."
+        )
+
+        st.info(
+            "선택한 날짜의 박스오피스 데이터가 아직 없거나 "
+            "KOBIS에서 제공되지 않는 날짜일 수 있습니다."
         )
 
         return None
+
 
     return movies
 
@@ -264,91 +239,139 @@ def get_boxoffice():
 # 🚀 데이터 불러오기
 # =========================================================
 
-movies = get_boxoffice()
+movies = get_boxoffice(target_date)
 
 
-# 데이터를 가져오지 못했다면 여기서 종료합니다.
+# 데이터를 가져오지 못했다면 종료
 if movies is None:
     st.stop()
 
 
 # =========================================================
-# 📅 조회 날짜 표시
+# 📅 선택 날짜 표시
 # =========================================================
 
-st.markdown(
-    f"""
-    <div class="date-box">
-        <div style="color:#888888; font-size:13px;">
-            BOX OFFICE DATE
-        </div>
+st.divider()
 
-        <div style="
-            font-size:28px;
-            font-weight:700;
-            margin-top:5px;
-        ">
-            {display_date}
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True
+st.subheader(f"🎞️ {display_date} 박스오피스")
+
+st.caption(
+    f"KOBIS 일별 박스오피스 · {len(movies)}개 영화"
 )
 
 
 # =========================================================
-# 🎬 영화 순위 출력
+# 🎬 영화 목록
 # =========================================================
 
 for movie in movies:
 
-    # KOBIS에서 받아온 값들은 문자열입니다.
+    # -----------------------------------------------------
+    # 기본 정보
+    # -----------------------------------------------------
+
     rank = movie.get("rank", "-")
-    movie_name = movie.get("movieNm", "영화 제목 없음")
-    open_date = movie.get("openDt", "-")
 
-    audi_cnt = movie.get("audiCnt", "0")
-    audi_acc = movie.get("audiAcc", "0")
-    screen_cnt = movie.get("scrnCnt", "0")
+    movie_name = movie.get(
+        "movieNm",
+        "영화 제목 정보 없음"
+    )
 
-    rank_inten = movie.get("rankInten", "0")
-    rank_old_new = movie.get("rankOldAndNew", "")
+    open_date = movie.get(
+        "openDt",
+        ""
+    )
+
+    audi_cnt = movie.get(
+        "audiCnt",
+        "0"
+    )
+
+    audi_acc = movie.get(
+        "audiAcc",
+        "0"
+    )
+
+    screen_cnt = movie.get(
+        "scrnCnt",
+        "0"
+    )
+
+    rank_inten = movie.get(
+        "rankInten",
+        "0"
+    )
+
+    rank_old_new = movie.get(
+        "rankOldAndNew",
+        ""
+    )
 
 
     # =====================================================
-    # 🔢 숫자에 쉼표 넣기
+    # 🔢 숫자 변환
     # =====================================================
 
     try:
-        audi_cnt_text = f"{int(audi_cnt):,}명"
+        audi_cnt_number = int(audi_cnt)
     except:
-        audi_cnt_text = f"{audi_cnt}명"
+        audi_cnt_number = 0
 
     try:
-        audi_acc_text = f"{int(audi_acc):,}명"
+        audi_acc_number = int(audi_acc)
     except:
-        audi_acc_text = f"{audi_acc}명"
+        audi_acc_number = 0
 
     try:
-        screen_cnt_text = f"{int(screen_cnt):,}개"
+        screen_cnt_number = int(screen_cnt)
     except:
-        screen_cnt_text = f"{screen_cnt}개"
+        screen_cnt_number = 0
+
+    try:
+        rank_change_number = int(rank_inten)
+    except:
+        rank_change_number = 0
+
+
+    # 보기 좋은 숫자로 변환
+    audi_cnt_text = f"{audi_cnt_number:,}명"
+    audi_acc_text = f"{audi_acc_number:,}명"
+    screen_cnt_text = f"{screen_cnt_number:,}개"
 
 
     # =====================================================
-    # 📅 개봉일 보기 좋게 변경
+    # 📅 개봉일 처리
     # =====================================================
 
-    if open_date and len(open_date) == 8:
+    if open_date:
 
-        open_date_text = (
-            f"{open_date[:4]}."
-            f"{open_date[4:6]}."
-            f"{open_date[6:]}"
-        )
+        # KOBIS의 YYYY-MM-DD 형식 그대로 사용
+        if "-" in open_date:
+            open_date_text = open_date
+
+        # 혹시 YYYYMMDD 형식으로 오는 경우
+        elif len(open_date) == 8:
+            open_date_text = (
+                f"{open_date[:4]}-"
+                f"{open_date[4:6]}-"
+                f"{open_date[6:]}"
+            )
+
+        else:
+            open_date_text = open_date
 
     else:
         open_date_text = "정보 없음"
+
+
+    # =====================================================
+    # 🏆 100만 관객 돌파 여부
+    # =====================================================
+
+    if audi_acc_number >= 1_000_000:
+        trophy = " 🏆"
+    else:
+        trophy = ""
 
 
     # =====================================================
@@ -357,94 +380,104 @@ for movie in movies:
 
     if rank_old_new == "NEW":
 
-        rank_change = "🆕 NEW"
+        rank_change_text = "🆕 NEW"
 
-    elif rank_inten == "0":
+    elif rank_change_number > 0:
 
-        rank_change = "━ 유지"
+        # 양수 = 순위 상승
+        rank_change_text = (
+            f'<span style="color:#ff4b4b; font-weight:700;">'
+            f'▲ {rank_change_number}'
+            f'</span>'
+        )
+
+    elif rank_change_number < 0:
+
+        # 음수 = 순위 하락
+        rank_change_text = (
+            f'<span style="color:#4b8cff; font-weight:700;">'
+            f'▼ {abs(rank_change_number)}'
+            f'</span>'
+        )
 
     else:
 
-        try:
-
-            change = int(rank_inten)
-
-            if change > 0:
-                rank_change = f"▲ {change}"
-
-            else:
-                rank_change = f"▼ {abs(change)}"
-
-        except:
-
-            rank_change = "━"
+        rank_change_text = "━ 유지"
 
 
     # =====================================================
-    # 🎞️ 영화 카드
+    # 🎬 영화 카드
     # =====================================================
 
-    st.markdown(
-        '<div class="movie-card">',
-        unsafe_allow_html=True
-    )
+    with st.container(border=True):
 
-    col1, col2 = st.columns([1, 6])
-
-
-    # -----------------------------------------------------
-    # 순위
-    # -----------------------------------------------------
-
-    with col1:
-
-        st.markdown(
-            f"""
-            <div class="rank">
-                #{rank}
-            </div>
-
-            <div style="
-                color:#aaaaaa;
-                margin-top:5px;
-            ">
-                {rank_change}
-            </div>
-            """,
-            unsafe_allow_html=True
+        col1, col2, col3 = st.columns(
+            [1, 5, 2]
         )
 
 
-    # -----------------------------------------------------
-    # 영화 정보
-    # -----------------------------------------------------
+        # -------------------------------------------------
+        # 순위
+        # -------------------------------------------------
 
-    with col2:
+        with col1:
 
-        st.markdown(
-            f"""
-            <div class="movie-name">
-                {movie_name}
-            </div>
+            st.markdown(
+                f"### #{rank}"
+            )
 
-            <div class="info">
-                🎬 개봉일　{open_date_text}<br>
-                👥 일일 관객　{audi_cnt_text}<br>
-                🎟️ 누적 관객　{audi_acc_text}<br>
-                🖥️ 스크린 수　{screen_cnt_text}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+            st.markdown(
+                rank_change_text,
+                unsafe_allow_html=True
+            )
 
-    st.markdown(
-        '</div>',
-        unsafe_allow_html=True
-    )
+
+        # -------------------------------------------------
+        # 영화 정보
+        # -------------------------------------------------
+
+        with col2:
+
+            st.markdown(
+                f"### {movie_name}{trophy}"
+            )
+
+            st.write(
+                f"🎬 **개봉일:** {open_date_text}"
+            )
+
+            st.write(
+                f"👥 **일일 관객:** {audi_cnt_text}"
+            )
+
+            st.write(
+                f"🎟️ **누적 관객:** {audi_acc_text}"
+            )
+
+            st.write(
+                f"🖥️ **스크린 수:** {screen_cnt_text}"
+            )
+
+
+        # -------------------------------------------------
+        # 핵심 수치
+        # -------------------------------------------------
+
+        with col3:
+
+            st.metric(
+                "누적 관객",
+                audi_acc_text
+            )
+
+            st.metric(
+                "스크린",
+                screen_cnt_text
+            )
 
 
 # =========================================================
-# 📌 하단 안내
+# 📌 출처
 # =========================================================
 
 st.divider()
@@ -455,6 +488,5 @@ st.caption(
 )
 
 st.caption(
-    "🇰🇷 조회 날짜는 한국 시간(Asia/Seoul)을 기준으로 "
-    "자동으로 '어제'를 계산합니다."
+    "※ 오늘 날짜는 아직 박스오피스 집계 전이므로 선택할 수 없습니다."
 )
