@@ -1,70 +1,108 @@
 import streamlit as st
 from openai import OpenAI
 
-# 페이지 기본 설정 (타이틀 및 아이콘)
-st.set_page_config(page_title="AI 정보 선생님", page_icon="💬")
+# 1. 페이지 기본 설정
+st.set_page_config(page_title="주은이와의 채팅", page_icon="💬")
 
-st.title("💬 친절한 AI 정보 선생님")
-st.write("궁금한 점이 있다면 무엇이든 편하게 물어보세요!")
+# 화면 상단 타이틀 및 설명
+st.title("💬 주은이와의 채팅")
+st.write("편하게 이야기해 보세요!")
 
-# 1. Secrets에서 Gemini API 키 불러오기
+# 2. API 키 세팅 및 OpenAI 클라이언트 준비
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
 except Exception:
     st.error("API 키를 찾을 수 없습니다. .streamlit/secrets.toml 파일에 GEMINI_API_KEY를 설정해 주세요.")
     st.stop()
 
-# 2. OpenAI 클라이언트를 Gemini 호환 엔드포인트로 설정
 client = OpenAI(
     api_key=api_key,
-    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+    base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
 )
 
-# 3. AI 페르소나(시스템 프롬프트) 설정
-SYSTEM_PROMPT = (
-    "너는 중고등학생에게 설명하는 친절한 정보 선생님이야. "
-    "어려운 말은 쉬운 말로 바꿔 주고, 반드시 순수 한국어로만 답해"
-)
+# 3. 주은이의 말투 프롬프트 정의
+PRESET_PROMPTS = {
+    "백구 주은이": (
+        "너는 사용자에게 궁금한 걸 되물어보고 힌트를 주며 스몰토크를 이어가는 귀엽고 살가운 친구 '주은이'야. "
+        "정답이나 결론을 바로 알려주지 않고 힌트를 하나 준 뒤 다시 생각해보도록 귀엽게 되물어봐줘. "
+        "상대방이 맞히거나 알아챘을 때 신나게 칭찬하고 인정해줘."
+    ),
+    "멋있는 주은이": (
+        "너는 다정하고 든든하며 친절하게 잘 설명해주는 멋진 친구 '주은이'야. "
+        "어려운 내용도 쉽고 상냥하게 풀어서 설명해주고, 항상 따뜻한 어조로 응원하며 순수 한국어로 답해줘."
+    ),
+    "단호한 주은이": (
+        "너는 대답을 간결하고 명확하게 핵심만 전달하는 단호하고 시크한 친구 '주은이'야. "
+        "사족이나 불필요한 미사여구 없이 확실하고 정확한 답변을 짧고 깔끔하게 말해줘."
+    )
+}
 
-# 4. 세션 상태(Session State)를 활용해 대화 기록 초기화 및 유지
+# 4. 사이드바 구성
+with st.sidebar:
+    st.header("⚙️ 설정")
+    
+    # 4-1. 말투 고르기
+    selected_style = st.selectbox(
+        "말투 고르기",
+        options=list(PRESET_PROMPTS.keys()),
+        index=0
+    )
+    
+    # 선택한 말투 프롬프트를 기본값으로 설정하되, 사용자가 수정을 원할 경우 세션 상태 활용
+    if "custom_prompt" not in st.session_state or st.session_state.get("last_selected_style") != selected_style:
+        st.session_state.custom_prompt = PRESET_PROMPTS[selected_style]
+        st.session_state.last_selected_style = selected_style
+
+    # 4-2. 성격 문장 직접 수정하기
+    system_instruction = st.text_area(
+        "성격 문장 직접 수정",
+        value=st.session_state.custom_prompt,
+        height=130,
+        help="주은이의 성격(시스템 프롬프트)을 원하는 대로 자유롭게 수정할 수 있습니다."
+    )
+
+    st.markdown("---")
+    
+    # 4-3. 대화 지우기 버튼
+    if st.button("🗑️ 대화 지우기", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+
+# 5. 세션 상태에 대화 기록 저장소 초기화
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 5. 기존 대화 기록을 화면에 말풍선 형태로 출력
+# 6. 이전 대화 목록 출력
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 6. 사용자 입력창 처리
-if user_input := st.chat_input("선생님에게 질문을 입력하세요..."):
-    # 사용자 메시지를 화면에 즉시 표시
+# 7. 사용자 채팅 입력 처리
+if user_input := st.chat_input("주은이에게 말을 걸어보세요!"):
+    # 사용자 입력 화면 출력 및 저장
     with st.chat_message("user"):
         st.markdown(user_input)
-    
-    # 대화 기록에 사용자 메시지 추가
     st.session_state.messages.append({"role": "user", "content": user_input})
 
-    # 7. AI 응답 생성 및 실시간 스트리밍 출력
+    # AI(주은이) 응답 스트리밍
     with st.chat_message("assistant"):
         try:
-            # 전달할 전체 대화 목록 구성 (시스템 프롬프트 + 이전 대화 기록)
-            api_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + [
+            # 설정된 system_instruction을 항상 맨 위에 포함하여 말투 변경이 즉시 반영되도록 함
+            api_messages = [{"role": "system", "content": system_instruction}] + [
                 {"role": m["role"], "content": m["content"]} for m in st.session_state.messages
             ]
 
-            # OpenAI SDK를 통한 스트리밍 요청 (gemini-3.5-flash-lite 모델 지정)
             stream = client.chat.completions.create(
                 model="gemini-3.5-flash-lite",
                 messages=api_messages,
-                stream=True
+                stream=True,
             )
 
-            # 실시간으로 글자가 흘러나오도록 st.write_stream 활용
-            response_text = st.write_stream(stream)
-
-            # 답변 완료 후 대화 기록에 AI 응답 저장
-            st.session_state.messages.append({"role": "assistant", "content": response_text})
+            # 실시간 텍스트 스트리밍 출력
+            answer = st.write_stream(stream)
+            
+            # 주은이의 답변 대화 기록에 저장
+            st.session_state.messages.append({"role": "assistant", "content": answer})
 
         except Exception:
-            # 오류 발생 시 빨간색 시스템 예외 대신 친절한 한국어 안내 출력
-            st.warning("선생님이 잠시 응답하기 어려워해요. 잠시 후 다시 시도해 주세요.")
+            st.error("응답을 받지 못했습니다. 잠시 후 다시 보내 주세요.")
