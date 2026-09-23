@@ -6,7 +6,7 @@ st.set_page_config(page_title="주은이와의 채팅", page_icon="💬")
 
 # 화면 상단 타이틀 및 설명
 st.title("💬 주은이와의 채팅")
-st.write("편하게 이야기해 보세요!")
+st.write("주은이를 만나보세요! ")
 
 # 2. API 키 세팅 및 OpenAI 클라이언트 준비
 try:
